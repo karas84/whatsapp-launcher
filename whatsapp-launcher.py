@@ -373,7 +373,7 @@ class LocalInstaller(object):
             raise ValueError("An instantiation already exists!")
 
         self.CUR_SCRIPT_PATH   = os.path.realpath(__file__)
-        self.WRAPPER_DIR_PATH  = os.path.expanduser("~/.whatsappwrapper-indicator") + "/"
+        self.WRAPPER_DIR_PATH  = os.path.expanduser("~/.whatsapp-launcher") + "/"
         self.SCRIPT_FILE_PATH  = self.WRAPPER_DIR_PATH + os.path.basename(__file__)
         self.ICON_FILE_PATH    = self.WRAPPER_DIR_PATH + "whatsapp.png"
         self.DESKTOP_FILE_PATH = os.path.expanduser("~/.local/share/applications/whatsapp.desktop")
