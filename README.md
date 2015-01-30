@@ -6,5 +6,5 @@ WhatsApp Web Launcher for Ubuntu Unity
 - New Conversation Count on Launcher
 
 # Prerequisites
-Google Chrome: get it from https://www.google.com/chrome/browser/desktop/
-Xlib for python: sudo apt-get install python-xlib
+- Google Chrome: get it from https://www.google.com/chrome/browser/desktop/
+- Xlib for python: sudo apt-get install python-xlib
