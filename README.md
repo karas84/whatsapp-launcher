@@ -7,4 +7,4 @@ WhatsApp Web Launcher for Ubuntu Unity
 
 # Prerequisites
 - Google Chrome: get it from https://www.google.com/chrome/browser/desktop/
-- Xlib for python: sudo apt-get install python-xlib
+- Xlib for python: sudo apt-get install python-xlib python-gi
