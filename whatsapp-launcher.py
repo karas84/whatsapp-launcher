@@ -7,10 +7,9 @@
 __author__ = 'karas84'
 
 
-import Xlib
-from Xlib import X, display
-from Xlib.protocol.event import PropertyNotify
-from gi.repository import Unity, GObject
+import gi
+gi.require_version('Unity', '7.0')
+from gi.repository import Unity, GLib
 import threading
 import re
 import subprocess
@@ -18,20 +17,23 @@ import sys
 import os
 import hashlib
 import shutil
+import Xlib
+from Xlib import X, display
+from Xlib.protocol.event import PropertyNotify
+from Queue import Queue
 
-GObject.threads_init()
+badge_queue = Queue()
+GLib.threads_init()
 
-_NET_WM_NAME      = display.Display().intern_atom('_NET_WM_NAME')
-_NET_CLIENT_LIST  = display.Display().intern_atom('_NET_CLIENT_LIST')
+_NET_WM_NAME = display.Display().intern_atom('_NET_WM_NAME')
+_NET_CLIENT_LIST = display.Display().intern_atom('_NET_CLIENT_LIST')
 _NET_CLOSE_WINDOW = display.Display().intern_atom('_NET_CLOSE_WINDOW')
 
-UTF8_STRING       = display.Display().intern_atom('UTF8_STRING')
+UTF8_STRING = display.Display().intern_atom('UTF8_STRING')
 
 
 class XTools(object):
-
     INSTANCE = None
-
 
     def __init__(self):
         if self.INSTANCE is not None:
@@ -42,30 +44,24 @@ class XTools(object):
         self.display = display.Display()
         self.root = self.display.screen().root
 
-
     @classmethod
-    def Instance(cls):
+    def instance(cls):
         if cls.INSTANCE is None:
-             cls.INSTANCE = XTools()
+            cls.INSTANCE = XTools()
 
         return cls.INSTANCE
-
 
     def get_root(self):
         return self.root
 
-
     def get_display(self):
         return self.display
-
 
     def create_window_from_id(self, window_id):
         return self.display.create_resource_object('window', window_id)
 
-
     def get_client_list(self):
         return self.root.get_full_property(_NET_CLIENT_LIST, Xlib.X.AnyPropertyType).value
-
 
     def get_window_by_class_name(self, class_name):
         window = None
@@ -76,7 +72,6 @@ class XTools(object):
                     break
 
         return window
-
 
     def get_client_by_class_name(self, class_name):
         window = None
@@ -93,70 +88,58 @@ class XTools(object):
         return window
 
 
-
 class XWindow(object):
-
     class WindowIsNone(Exception):
         def __init__(self):
             super(XWindow.WindowIsNone, self).__init__()
-
 
     def __init__(self, window):
         if window is None:
             raise WAWindow.WindowIsNone()
 
-        self.XTools = XTools.Instance()
+        self.XTools = XTools.instance()
         self.window = window
-
 
     def click(self, button=1):
         self.XTools.mouse_down(self.window, button)
         self.XTools.mouse_up(self.window, button)
 
-
     def double_click(self, button=1):
         self.click(button)
         self.click(button)
 
-
     def close(self):
-        close_message = Xlib.protocol.event.ClientMessage(window=self.window, client_type=_NET_CLOSE_WINDOW, data=(32,[0,0,0,0,0]))
+        close_message = Xlib.protocol.event.ClientMessage(window=self.window, client_type=_NET_CLOSE_WINDOW,
+                                                          data=(32, [0, 0, 0, 0, 0]))
         mask = (X.SubstructureRedirectMask | X.SubstructureNotifyMask)
 
-        self.XTools.Instance().get_root().send_event(close_message, event_mask=mask)
+        self.XTools.instance().get_root().send_event(close_message, event_mask=mask)
         self.XTools.get_display().flush()
-
 
     def hide(self):
         Xlib.protocol.request.UnmapWindow(display=self.XTools.get_display().display, window=self.window.id)
         self.XTools.get_display().sync()
 
-
     def show(self):
         Xlib.protocol.request.MapWindow(display=self.XTools.get_display().display, window=self.window.id)
         self.XTools.get_display().sync()
 
-
     def get_title(self):
         return self.window.get_full_property(_NET_WM_NAME, UTF8_STRING).value
-
 
     def set_class(self, app_name, app_class):
         self.window.set_wm_class(app_name, app_class)
         self.XTools.get_display().sync()
-
 
     def set_app_name(self, app_class):
         class_name = app_class, str(self.window.get_wm_class()[1])
         self.window.set_wm_class(*class_name)
         self.XTools.get_display().sync()
 
-
     def set_app_class(self, app_name):
         class_name = str(self.window.get_wm_class()[0]), app_name
         self.window.set_wm_class(*class_name)
         self.XTools.get_display().sync()
-
 
     def next_event(self, instance=None, atom=None):
         ev = None
@@ -172,17 +155,13 @@ class XWindow(object):
         return ev
 
 
-
 class LocalInstaller(object):
-
     class RestartNeeded(Exception):
 
         def __init__(self):
             super(LocalInstaller.RestartNeeded, self).__init__()
 
-
     INSTANCE = None
-
 
     ICON_DATA = """iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccqhmAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3wEXCzcz/JBsDwAAIABJREFUeNrsfXecHMWV//dVz8zmXe0KS0gCSQgBIiMQwYBMEthgog0cxjacAYMx6QwYMHC2MTbncGcw/pE5MCCCST4nwGCDyBkBAiEQIBAIpJVWYdPMzkzX+/0xHaq7q8Ok
                 lQTb+rR2pqe6u7q63qsXvu89YGQb2Ua2kW1kG9lGtpFtZBvZRraRbWQb2Ua2kW1kG9lGtpFtZBvZRrbP5kYjQ/CZfacEQFifhfJdaH7XbazsMuSzuo9sIwxgZBvmdycAGNYuAKSU3QCQtv6miMgQQhhElCIig6zNxxAYAJhZMjMDkMwspZQmMxeZ2QRg7wXrb9HaTeW79DGKkW2EAYxsVWz2ym0TdMb6nAbQaH3PAGjaeuutO4477rgtdtllly3H
@@ -360,11 +339,10 @@ class LocalInstaller(object):
                 VdcTkZQs0YdCofbGxsaNS5YsWfzTn/50ha7+GYk5EeQ8vL3FHOBgBIDlWCMkBgYz3gcTiNn4mzsIPPfuDoNNNWDp0qX3JuPhDQaDzdu3b1956623zoLmua+FlsBRDCsxJzdyIzf6yfAR0dBIJNLOGOOccRvRM8Z4V1fXgS2fffbKOeecMwPAGGiJOQbR5yGXwJEbudFvR355WdlIplG9kX7Lurq6Dnz88ceLampqztKJfjiAAbq5kCP63MiNr8nI
                 q6+vv5WpLNodCu3797///TCAMwCMhZbAUQktRJjLz86N3OhPqn2S57GioqJGSZYG6zY8g+YRDuPrmZiTG7lxWIxUYN7E1EzRI5wbuZEbuZEbuZEbuZEbuZEbuZEbuZEbuZEbuZEbuZEbuZEbuZEbuZEbuZEbuZEbuZEbuZEbuZEbuZEbh2r8f9MLG+nctDnXAAAAAElFTkSuQmCC"""
 
-
     @classmethod
-    def Instance(cls):
+    def instance(cls):
         if cls.INSTANCE is None:
-             cls.INSTANCE = LocalInstaller()
+            cls.INSTANCE = LocalInstaller()
 
         return cls.INSTANCE
 
@@ -372,13 +350,13 @@ class LocalInstaller(object):
         if self.INSTANCE is not None:
             raise ValueError("An instantiation already exists!")
 
-        self.CUR_SCRIPT_PATH   = os.path.realpath(__file__)
-        self.WRAPPER_DIR_PATH  = os.path.expanduser("~/.whatsapp-launcher") + "/"
-        self.SCRIPT_FILE_PATH  = self.WRAPPER_DIR_PATH + os.path.basename(__file__)
-        self.ICON_FILE_PATH    = self.WRAPPER_DIR_PATH + "whatsapp.png"
+        self.CUR_SCRIPT_PATH = os.path.realpath(__file__)
+        self.WRAPPER_DIR_PATH = os.path.expanduser("~/.whatsapp-launcher") + "/"
+        self.SCRIPT_FILE_PATH = self.WRAPPER_DIR_PATH + os.path.basename(__file__)
+        self.ICON_FILE_PATH = self.WRAPPER_DIR_PATH + "whatsapp.png"
         self.DESKTOP_FILE_PATH = os.path.expanduser("~/.local/share/applications/whatsapp.desktop")
-        self.CHROME_DATA_DIR   = self.WRAPPER_DIR_PATH + "chrome-profile/"
-        self.CHROME_FIRST_RUN  = self.CHROME_DATA_DIR + "First Run"
+        self.CHROME_DATA_DIR = self.WRAPPER_DIR_PATH + "chrome-profile/"
+        self.CHROME_FIRST_RUN = self.CHROME_DATA_DIR + "First Run"
 
         self.DESKTOP_FILE_CONTENT = "[Desktop Entry]\n" + \
                                     "Version=1.0\n" + \
@@ -389,9 +367,9 @@ class LocalInstaller(object):
                                     "Icon=" + self.ICON_FILE_PATH + "\n" + \
                                     "Type=Application\n" + \
                                     "Categories=Network;WebBrowser;\n" + \
-                                    "MimeType=text/html;text/xml;application/xhtml_xml;image/webp;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/ftp;\n" + \
+                                    "MimeType=text/html;text/xml;application/xhtml_xml;image/webp;x-scheme-handler/" + \
+                                    "http;x-scheme-handler/https;x-scheme-handler/ftp;\n" + \
                                     "StartupWMClass=whatsapp-web-app"
-
 
     @staticmethod
     def sha256sum_file(file_name, block_size=65536):
@@ -405,7 +383,6 @@ class LocalInstaller(object):
 
         return sha256_hasher.hexdigest()
 
-
     @staticmethod
     def sha256sum_string(data, decode_type=None):
         if decode_type is None:
@@ -415,13 +392,11 @@ class LocalInstaller(object):
 
         return digest
 
-
     def compare_hash(self, file_name, data, decode_type=None):
         if not os.path.exists(file_name):
             return False
 
         return self.sha256sum_file(file_name) == self.sha256sum_string(data, decode_type)
-
 
     def compare_file_hash(self, file_name_1, file_name_2):
         if not (os.path.exists(file_name_1) and os.path.exists(file_name_2)):
@@ -431,7 +406,6 @@ class LocalInstaller(object):
             return True
 
         return self.sha256sum_file(file_name_1) == self.sha256sum_file(file_name_2)
-
 
     def write_file(self, file_name, file_data, decode_type=None):
         file_written = False
@@ -452,14 +426,12 @@ class LocalInstaller(object):
 
         return file_written
 
-
     def install(self):
         need_restart = False
 
         need_restart |= self.write_file(self.ICON_FILE_PATH, self.ICON_DATA, decode_type='base64')
         need_restart |= self.write_file(self.DESKTOP_FILE_PATH, self.DESKTOP_FILE_CONTENT)
         need_restart |= self.write_file(self.CHROME_FIRST_RUN, '')
-
 
         if not self.compare_file_hash(self.CUR_SCRIPT_PATH, self.SCRIPT_FILE_PATH):
             shutil.copyfile(self.CUR_SCRIPT_PATH, self.SCRIPT_FILE_PATH)
@@ -469,18 +441,14 @@ class LocalInstaller(object):
             raise LocalInstaller.RestartNeeded()
 
 
-
 class UnityNotRunning(Exception):
 
     def __init__(self):
         super(UnityNotRunning, self).__init__()
 
 
-
 class UnityHelper(object):
-
     INSTANCE = None
-
 
     def __init__(self):
         if self.INSTANCE is not None:
@@ -488,14 +456,12 @@ class UnityHelper(object):
 
         self.unity_running = False
 
-
     @classmethod
-    def Instance(cls):
+    def instance(cls):
         if cls.INSTANCE is None:
-             cls.INSTANCE = UnityHelper()
+            cls.INSTANCE = UnityHelper()
 
         return cls.INSTANCE
-
 
     def check_unity(self):
         if not self.unity_running:
@@ -511,23 +477,21 @@ class UnityHelper(object):
         return True
 
 
-
 class WALauncher(threading.Thread):
 
     def __init__(self, chrome_path="/usr/bin/google-chrome-stable"):
         super(WALauncher, self).__init__()
         self.chrome_path = chrome_path
 
-
     def run(self):
         sp_whatsapp = subprocess.Popen([self.chrome_path,
                                         "--app=https://web.whatsapp.com",
-                                        "--user-data-dir=" + LocalInstaller.Instance().CHROME_DATA_DIR,
-                                        "--no-default-browser-check"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+                                        "--user-data-dir=" + LocalInstaller.instance().CHROME_DATA_DIR,
+                                        "--no-default-browser-check"], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                       stdin=subprocess.PIPE)
         sp_whatsapp.wait()
 
         loop.quit()
-
 
 
 class CompizNotFound(Exception):
@@ -536,23 +500,23 @@ class CompizNotFound(Exception):
         super(CompizNotFound, self).__init__()
 
 
-
 class WAWindow(XWindow):
-
     class CompizNotFound(Exception):
         def __init__(self):
             super(WAWindow.CompizNotFound, self).__init__()
-
 
     def __init__(self):
         self.whatsapp_window = None
 
         try:
-            self.w_compiz = XWindow(XTools.Instance().get_window_by_class_name('compiz'))
+            self.w_compiz = XWindow(XTools.instance().get_window_by_class_name('compiz'))
         except XWindow.WindowIsNone:
-            raise WAWindow.CompizNotFound()
+            try:
+                self.w_compiz = XWindow(XTools.instance().get_window_by_class_name('gnome-shell'))
+            except XWindow.WindowIsNone:
+                raise WAWindow.CompizNotFound()
 
-        XTools.Instance().get_root().change_attributes(event_mask=X.SubstructureNotifyMask)
+        XTools.instance().get_root().change_attributes(event_mask=X.SubstructureNotifyMask)
         self.w_compiz.window.change_attributes(event_mask=X.SubstructureNotifyMask)
 
         self.thread = threading.Thread(target=self.find_whatsapp)
@@ -568,12 +532,10 @@ class WAWindow(XWindow):
         self.set_app_class('whatsapp-web-app')
         self.window.change_attributes(event_mask=X.PropertyChangeMask)
 
-
     def find_whatsapp(self):
         while self.whatsapp_window is None:
             if self.w_compiz.next_event():
-                self.whatsapp_window = XTools.Instance().get_client_by_class_name('whatsapp')
-
+                self.whatsapp_window = XTools.instance().get_client_by_class_name('whatsapp')
 
 
 class WACountUpdater(threading.Thread):
@@ -581,45 +543,79 @@ class WACountUpdater(threading.Thread):
     def __init__(self, wa_window):
         super(WACountUpdater, self).__init__()
         self.wa_window = wa_window
-        self.u_launcher = Unity.LauncherEntry.get_for_desktop_id ("whatsapp.desktop")
+        self.u_launcher = Unity.LauncherEntry.get_for_desktop_id("whatsapp.desktop")
         self.re_w = re.compile('^\((\d+)\)(:?.+)?$')
         self.setDaemon(True)
         self.start()
 
-
     def update_count(self, count):
-        bool_enable = (count is not 0)
-
-        self.u_launcher.set_property("count-visible", bool_enable)
-        self.u_launcher.set_property("count", count)
-        self.u_launcher.set_property("urgent", bool_enable)
-
+        if count == 0:
+            self.u_launcher.props.count_visible = False
+            self.u_launcher.props.count = 0
+            self.u_launcher.props.urgent = False
+        else:
+            badge_queue.put_nowait(count)
 
     def parse_title(self):
-        try:    notif_count = int(self.re_w.match(self.wa_window.get_title()).group(1))
-        except: notif_count = 0
+        try:
+            notif_count = int(self.re_w.match(self.wa_window.get_title()).group(1))
+        except:
+            notif_count = 0
 
         return notif_count
-
 
     def run(self):
         while True:
             self.wa_window.next_event(instance=PropertyNotify, atom=_NET_WM_NAME)
-            GObject.idle_add(self.update_count, self.parse_title())
+            GLib.idle_add(self.update_count, self.parse_title())
 
+
+class GLibMainLoopRunner(threading.Thread):
+    def __init__(self):
+        super(GLibMainLoopRunner, self).__init__()
+        self.loop = GLib.MainLoop()
+        self.setDaemon(True)
+        self.start()
+
+    def run(self):
+        self.loop.run()
+
+    def quit(self):
+        self.loop.quit()
+
+
+class UnityCountUpdater(threading.Thread):
+    def __init__(self):
+        super(UnityCountUpdater, self).__init__()
+        self.launcher_entry = Unity.LauncherEntry.get_for_desktop_id("whatsapp.desktop")
+        [self.update(0) for _ in range(1000)]  # Hack-Fix: Force GLib warning
+        self.setDaemon(True)
+        self.count = 0
+        self.start()
+
+    def update(self, count):
+        self.launcher_entry.props.count = count
+        self.launcher_entry.props.count_visible = count > 0
+        self.launcher_entry.props.urgent = count > 0
+
+    def run(self):
+        while True:
+            count = badge_queue.get()
+            if count > 0:
+                self.update(count)
 
 
 if __name__ == "__main__":
     try:
-        UnityHelper.Instance().check_unity()
+        UnityHelper.instance().check_unity()
 
-        LocalInstaller().Instance().install()
+        LocalInstaller().instance().install()
 
-        loop = GObject.MainLoop()
+        loop = GLibMainLoopRunner()
 
-        t_wacu = WACountUpdater(WAWindow())
+        UnityCountUpdater()
 
-        loop.run()
+        WACountUpdater(WAWindow())
     except UnityNotRunning:
         print "Unity not found!"
         sys.exit(-1)
@@ -627,6 +623,6 @@ if __name__ == "__main__":
         print "Compiz not found!"
         sys.exit(-1)
     except LocalInstaller.RestartNeeded:
-        os.chmod(LocalInstaller.Instance().SCRIPT_FILE_PATH, 0755)
-        os.chmod(LocalInstaller.Instance().DESKTOP_FILE_PATH, 0755)
-        subprocess.call([LocalInstaller.Instance().SCRIPT_FILE_PATH])
+        os.chmod(LocalInstaller.instance().SCRIPT_FILE_PATH, 0755)
+        os.chmod(LocalInstaller.instance().DESKTOP_FILE_PATH, 0755)
+        subprocess.Popen([LocalInstaller.instance().SCRIPT_FILE_PATH])
