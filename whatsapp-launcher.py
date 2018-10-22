@@ -3,6 +3,8 @@
 
 # Created on: 01/28/15
 
+from __future__ import print_function
+
 
 __author__ = 'karas84'
 
@@ -20,7 +22,13 @@ import shutil
 import Xlib
 from Xlib import X, display
 from Xlib.protocol.event import PropertyNotify
-from Queue import Queue
+
+try:
+    # noinspection PyCompatibility
+    from queue import Queue
+except ImportError:
+    # noinspection PyCompatibility
+    from Queue import Queue
 
 badge_queue = Queue()
 GLib.threads_init()
@@ -617,12 +625,12 @@ if __name__ == "__main__":
 
         WACountUpdater(WAWindow())
     except UnityNotRunning:
-        print "Unity not found!"
+        print("Unity not found!")
         sys.exit(-1)
     except CompizNotFound:
-        print "Compiz not found!"
+        print("Compiz not found!")
         sys.exit(-1)
     except LocalInstaller.RestartNeeded:
-        os.chmod(LocalInstaller.instance().SCRIPT_FILE_PATH, 0755)
-        os.chmod(LocalInstaller.instance().DESKTOP_FILE_PATH, 0755)
+        os.chmod(LocalInstaller.instance().SCRIPT_FILE_PATH, 0o755)
+        os.chmod(LocalInstaller.instance().DESKTOP_FILE_PATH, 0o755)
         subprocess.Popen([LocalInstaller.instance().SCRIPT_FILE_PATH])
