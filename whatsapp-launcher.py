@@ -607,7 +607,7 @@ class UnityCountUpdater(threading.Thread):
 
 if __name__ == "__main__":
     try:
-        UnityHelper.instance().check_unity()
+        # UnityHelper.instance().check_unity()
 
         LocalInstaller().instance().install()
 
